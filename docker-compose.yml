@@ -1,0 +1,51 @@
+services:
+  backend:
+    build: ./backend
+    container_name: robot-backend
+    ports:
+      - "4000:4000"
+    # Le frontend est servi par nginx sur le port 8090 : sans cette origine, le
+    # navigateur bloque tous les POST /api/* et le simulateur reste figé.
+    environment:
+      - FRONTEND_ORIGIN=${FRONTEND_ORIGIN:-http://localhost:8090}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:4000/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  frontend:
+    build: ./frontend
+    container_name: robot-frontend
+    ports:
+      - "8090:80"
+    restart: unless-stopped
+    depends_on:
+      - backend
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    restart: unless-stopped
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=changeme123
+    restart: unless-stopped
