@@ -138,13 +138,6 @@ export default function RobotSimulator({ selectedRobot, onBack }) {
                 {notice.text}
               </div>
             )}
-            {/* DIAGNOSTIC TEMPORAIRE — à retirer une fois la panne identifiée. */}
-            <div style={{ marginTop: "8px", padding: "8px 10px", background: "#11161d", border: "1px dashed #30363d", borderRadius: "8px", fontFamily: "monospace", fontSize: "10px", color: "#8b95a3", lineHeight: 1.6, wordBreak: "break-all" }}>
-              <div>ws={connected ? "open" : "closed"} state={state ? "RECU" : "NULL"} sync={String(robotSynced)}</div>
-              <div>srv.robotId={state?.robotId ?? "-"} srv.j1={state?.joints?.j1 ?? "-"}</div>
-              <div>overrides={JSON.stringify(overrides)}</div>
-              <div>display.j1={Math.round(displayJoints.j1 ?? 0)}</div>
-            </div>
           </div>
 
           <div style={{ marginBottom: "20px" }}>
