@@ -121,6 +121,77 @@ ROBOTS = {
             ("L6_wrist_3",   "wrist3",   ["C-2006871"]),
         ],
     },
+    # UR30 differs from the others in two ways worth knowing.
+    #
+    # First, it is authored POSED, not straight up, so the products do not stack
+    # along +Y and the inspection pass cannot be read top to bottom. The links
+    # below were identified by which joint bores they share, not by Y order.
+    # Solving the chain against those bores gives the CAD pose that
+    # robotDefinitions.ur30.articulation.referencePoseDeg carries.
+    #
+    # Second, the upper arm and forearm are each three solids -- two end
+    # castings plus the tube between them (the 704-* parts) -- where UR20 has
+    # one apiece. UR30 does reuse UR20's base, shoulder and both wrist castings.
+    #
+    #   J1  axis Y through x=0, z=0                    J4  through (64.3, 318.0, 167.4)
+    #   J2  through (0, 236.3, 0), dir (0.934,0,-.358) J5  through (-123.4, 318.0, 239.4)
+    #   J3  through (219.5, 60.7, 571.6)               J6  through (-67.7, 283.0, 384.5)
+    #
+    # giving d1=236.3, a2=637.0, a3=503.7, d4=201.0, d5=159.3 mm, and d6=154.3
+    # from the flange face (the 4896 mm^2 plane normal to J6).
+    "ur30": {
+        "step": "UR30.step",
+        "root": "UR30",
+        "links": [
+            # 1005866 is the same base bracket the UR20 carries: no joint bore,
+            # so it rides with the base.
+            ("L0_base",      "base",     ["C-2003903", "1005866"]),
+            ("L1_shoulder",  "shoulder", ["C-2003904"]),
+            # C-2007307 holds the J2 bore, C-2007308 the J3 bore, and
+            # 704-251-01 is the r=90 tube joining them.
+            ("L2_upper_arm", "upperarm", ["C-2007307", "C-2007308", "704-251-01"]),
+            # C-2007310 holds the J3 bore, C-2007311 the J4 bore, and
+            # 704-250-01 is the r=75 tube joining them.
+            ("L3_forearm",   "forearm",  ["C-2007310", "C-2007311", "704-250-01"]),
+            ("L4_wrist_1",   "wrist1",   ["C-2003907"]),
+            ("L5_wrist_2",   "wrist2",   ["C-2003908"]),
+            ("L6_wrist_3",   "wrist3",   ["C-2007588"]),
+        ],
+    },
+    # UR15 is one casting per link like UR20, but authored POSED like UR30, so
+    # the products do not stack along +Y. Note the J3 and J4 bores are NOT in
+    # the six largest cylinders this script reports, so the inspection output
+    # alone does not identify this arm -- the pairs below were confirmed by
+    # matching bore radius on the full face list (J3 r=60 on the y=95.05,
+    # z=-635.60 line; J4 r=45 on the y=305.09, z=-163.85 line).
+    #
+    #   J1  axis Y through x=0, z=0        J4  axis X at y=305.1, z=-163.9
+    #   J2  axis X at y=218.6, z=0         J5  through (182.4, 292.2, -215.4)
+    #   J3  axis X at y=95.1, z=-635.6     J6  axis X at y=272.2, z=-295.9
+    #
+    # giving d1=218.6, a2=647.5, a3=516.4, d4=182.4, d5=136.1 mm, and d6=143.4
+    # to the flange face -- which lands at x=325.80, the wrist 3 bbox edge.
+    "ur15": {
+        "step": "UR15.step",
+        "root": "UR15",
+        "links": [
+            # 1005866 is the same base bracket UR20 and UR30 carry.
+            ("L0_base",      "base",     ["C-2008876", "1005866"]),
+            ("L1_shoulder",  "shoulder", ["C-2008877"]),
+            ("L2_upper_arm", "upperarm", ["C-2008878"]),
+            ("L3_forearm",   "forearm",  ["C-2008879"]),
+            ("L4_wrist_1",   "wrist1",   ["C-2008880"]),
+            ("L5_wrist_2",   "wrist2",   ["C-2008881"]),
+            ("L6_wrist_3",   "wrist3",   ["C-2008882"]),
+        ],
+    },
+    # Not identified yet: run the inspection pass and read the assembly off
+    # tools/ur10e_solids.json before filling in "links".
+    "ur10e": {
+        "step": "UR10e.step",
+        "root": "UR10e",
+        "links": None,
+    },
 }
 
 ROBOT = (os.environ.get("STEP2GLB_ROBOT") or "ur3e").strip().lower()

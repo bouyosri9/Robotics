@@ -115,6 +115,64 @@ test('UR20 matches the geometry measured from its STEP file', () => {
   ]);
 });
 
+test('UR30 matches the geometry solved from its posed STEP file', () => {
+  const robot = ROBOT_DEFINITIONS.ur30;
+  assert.equal(robot.dof, 6);
+  // UR30.step is authored posed, so these came from solving the chain against
+  // the joint bores: J2||J3 637.00 mm apart, J3||J4 503.70 mm apart, the wrist
+  // axes perpendicular and intersecting, flange 154.30 mm past the wrist centre.
+  assert.deepEqual(robot.kinematics.dh.map((item) => Number(item.a.toFixed(5))), [0, -0.637, -0.5037, 0, 0, 0]);
+  assert.deepEqual(robot.kinematics.dh.map((item) => Number(item.d.toFixed(5))), [0.2363, 0, 0, 0.201, 0.1593, 0.1543]);
+  assert.deepEqual(robot.kinematics.dh.map((item) => Number(item.alpha.toFixed(5))), [1.5708, 0, 0, 1.5708, -1.5708, 0]);
+  assert.equal(robot.specifications.reachMm, 1300);
+  assert.deepEqual(robot.articulation.dhToScene, [-1, 0, 0, 0, 0, 1, 0, 1, 0]);
+
+  // The pose is the load-bearing part: unlike every other entry it is not all
+  // zeros, because the bind offsets have to undo the pose the CAD was drawn in.
+  assert.deepEqual(robot.articulation.referencePoseDeg, [111, -106, 165.281, -162, -8, 0]);
+  assert.notDeepEqual(robot.articulation.referencePoseDeg, [0, 0, 0, 0, 0, 0]);
+  // That elbow angle is why J3 is not clamped to the +/-160 its siblings use.
+  const j3 = robot.joints[2];
+  assert.ok(Math.abs(robot.articulation.referencePoseDeg[2]) <= j3.max);
+  assert.equal(robot.articulation.baseNode, 'L0_base');
+  assert.deepEqual(robot.articulation.linkNodes, [
+    'L1_shoulder',
+    'L2_upper_arm',
+    'L3_forearm',
+    'L4_wrist_1',
+    'L5_wrist_2',
+    'L6_wrist_3',
+  ]);
+});
+
+test('UR15 matches the geometry solved from its posed STEP file', () => {
+  const robot = ROBOT_DEFINITIONS.ur15;
+  assert.equal(robot.dof, 6);
+  // Solved from the joint bores in UR15.step: J2||J3 647.50 mm apart, J3||J4
+  // 516.40 mm apart, wrist axes perpendicular, flange 143.40 mm past the wrist.
+  assert.deepEqual(robot.kinematics.dh.map((item) => Number(item.a.toFixed(5))), [0, -0.6475, -0.5164, 0, 0, 0]);
+  assert.deepEqual(robot.kinematics.dh.map((item) => Number(item.d.toFixed(5))), [0.2186, 0, 0, 0.1824, 0.1361, 0.1434]);
+  assert.deepEqual(robot.kinematics.dh.map((item) => Number(item.alpha.toFixed(5))), [1.5708, 0, 0, 1.5708, -1.5708, 0]);
+  assert.equal(robot.specifications.reachMm, 1300);
+  assert.deepEqual(robot.articulation.dhToScene, [-1, 0, 0, 0, 0, 1, 0, 1, 0]);
+
+  // Posed CAD, so the pose is load-bearing. J5 specifically: the axis lines
+  // leave it free between 0 and -180, and only the flange position picks 0.
+  assert.deepEqual(robot.articulation.referencePoseDeg, [-90, -101, 167, -170, 0, 0]);
+  assert.notDeepEqual(robot.articulation.referencePoseDeg, [0, 0, 0, 0, 0, 0]);
+  // That elbow angle is why J3 is not clamped to the +/-160 UR3e/UR20 use.
+  assert.ok(Math.abs(robot.articulation.referencePoseDeg[2]) <= robot.joints[2].max);
+  assert.equal(robot.articulation.baseNode, 'L0_base');
+  assert.deepEqual(robot.articulation.linkNodes, [
+    'L1_shoulder',
+    'L2_upper_arm',
+    'L3_forearm',
+    'L4_wrist_1',
+    'L5_wrist_2',
+    'L6_wrist_3',
+  ]);
+});
+
 test('all robots have valid joint metadata', () => {
   for (const robot of ROBOT_LIST) {
     assert.ok(robot.name, `${robot.id} missing name`);

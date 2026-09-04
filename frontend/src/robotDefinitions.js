@@ -248,33 +248,93 @@ export const ROBOT_DEFINITIONS = {
     dof: 6,
     family: "UR Series",
     model: { url: "/models/ur15.glb" },
+    // Velocities follow the UR3e/UR20 entries (same convention in this
+    // codebase). J3 is +/-360 rather than +/-160 for the same reason as UR30:
+    // the CAD is authored with the elbow at 167 deg. Only the kinematics
+    // below are measured.
     joints: [
-      { id: "J1", key: "j1", label: "J1", min: -180, max: 180, default: 0, maxVelocity: 160 },
-      { id: "J2", key: "j2", label: "J2", min: -180, max: 180, default: -60, maxVelocity: 160 },
-      { id: "J3", key: "j3", label: "J3", min: -170, max: 170, default: 90, maxVelocity: 170 },
-      { id: "J4", key: "j4", label: "J4", min: -180, max: 180, default: -50, maxVelocity: 190 },
-      { id: "J5", key: "j5", label: "J5", min: -180, max: 180, default: 55, maxVelocity: 190 },
-      { id: "J6", key: "j6", label: "J6", min: -360, max: 360, default: 0, maxVelocity: 220 },
+      { id: "J1", key: "j1", label: "J1", min: -360, max: 360, default: 0, maxVelocity: 180, type: "revolute", continuous: true },
+      { id: "J2", key: "j2", label: "J2", min: -360, max: 360, default: -90, maxVelocity: 180, type: "revolute", continuous: true },
+      { id: "J3", key: "j3", label: "J3", min: -360, max: 360, default: 90, maxVelocity: 180, type: "revolute", continuous: true },
+      { id: "J4", key: "j4", label: "J4", min: -360, max: 360, default: -90, maxVelocity: 180, type: "revolute", continuous: true },
+      { id: "J5", key: "j5", label: "J5", min: -360, max: 360, default: 90, maxVelocity: 180, type: "revolute", continuous: true },
+      { id: "J6", key: "j6", label: "J6", min: -360, max: 360, default: 0, maxVelocity: 210, type: "revolute", continuous: true },
     ],
+    /**
+     * Measured from frontend/public/models/UR15.step, not taken from a
+     * datasheet. Like UR30 this STEP is authored posed, so the table below was
+     * solved from the joint bores rather than read off them: J2 and J3 are
+     * parallel 647.50 mm apart, J3 and J4 parallel 516.40 mm apart, the wrist
+     * axes perpendicular and intersecting. d6 is the flange face 143.40 mm
+     * past the wrist centre, which lands it at x=325.80 -- the outer edge of
+     * the wrist 3 casting, to 0.01 mm.
+     */
     kinematics: {
-      baseHeight: 95,
-      upperArmLength: 360,
-      forearmLength: 370,
-      wristLength: 125,
-      defaultScale: 0.001,
+      baseHeight: 0.2186,
+      upperArmLength: 0.6475,
+      forearmLength: 0.5164,
+      wristLength: 0.1824,
+      toolLength: 0.1361,
+      flangeLength: 0.1434,
+      defaultScale: 1,
+      // theta carries the standard UR joint offsets, so joint angles mean what
+      // the teach pendant means: all-zeros is the arm standing straight up.
+      dh: [
+        { joint: 1, theta: 0, a: 0, d: 0.2186, alpha: Math.PI / 2 },
+        { joint: 2, theta: -Math.PI / 2, a: -0.6475, d: 0, alpha: 0 },
+        { joint: 3, theta: 0, a: -0.5164, d: 0, alpha: 0 },
+        { joint: 4, theta: -Math.PI / 2, a: 0, d: 0.1824, alpha: Math.PI / 2 },
+        { joint: 5, theta: 0, a: 0, d: 0.1361, alpha: -Math.PI / 2 },
+        { joint: 6, theta: 0, a: 0, d: 0.1434, alpha: 0 },
+      ],
+    },
+    /**
+     * Rigging metadata for /models/ur15.glb, converted from UR15.step by
+     * tools/step_to_glb.py, which keeps the CAD assembly intact.
+     *
+     * As with UR30 the CAD is posed, so referencePoseDeg has to undo that pose
+     * rather than an all-zero one. One wrinkle is specific to this arm: J6 is
+     * parallel to J4 in the CAD pose, so the axis lines alone leave J5 free
+     * between 0 and -180 -- both put every axis on its bore. The flange breaks
+     * the tie. At J5=0 the tool points +X and the flange lands on the measured
+     * face to 0.01 mm; at -180 it points the other way and misses by 286.8 mm.
+     */
+    articulation: {
+      type: "dh-rig",
+      baseNode: "L0_base",
+      linkNodes: [
+        "L1_shoulder",
+        "L2_upper_arm",
+        "L3_forearm",
+        "L4_wrist_1",
+        "L5_wrist_2",
+        "L6_wrist_3",
+      ],
+      // The CAD pose, not a home pose. J6 is unconstrained (the wrist 3 casting
+      // is a body of revolution about J6), so it stays at 0.
+      referencePoseDeg: [-90, -101, 167, -170, 0, 0],
+      // Row-major 3x3: (x, y, z)_dh -> (-x, z, y)_scene
+      dhToScene: [-1, 0, 0, 0, 0, 1, 0, 1, 0],
+      // Flip to true to draw a coloured line through each J1-J6 rotation axis.
+      showJointAxes: false,
     },
     motion: {
-      maxAngularVelocityDegPerSec: 170,
-      accelerationDegPerSec2: 110,
-      smoothing: 0.16,
+      maxAngularVelocityDegPerSec: 180,
+      accelerationDegPerSec2: "TODO: requires verified manufacturer data",
+      smoothing: 0.18,
     },
+    // Payload follows UR's naming convention (UR15 -> 15 kg) and reach is the
+    // catalogue envelope. The rest still needs manufacturer data.
     specifications: {
       payload: 15,
+      payloadKg: 15,
       reach: 1300,
-      repeatability: "±0.05 mm",
-      weight: "36 kg",
+      reachMm: 1300,
+      repeatability: "unknown",
+      weight: "unknown",
       axes: 6,
-      maxTcpSpeed: "2.5 m/s",
+      maxTcpSpeed: "unknown",
+      dof: 6,
     },
     features: {
       vision: false,
@@ -282,8 +342,8 @@ export const ROBOT_DEFINITIONS = {
       collaborative: true,
     },
     presets: {
-      home: [0, -60, 90, -50, 55, 0],
-      demo: [45, -100, 120, -75, 75, 30],
+      home: [0, -90, 90, -90, 90, 0],
+      demo: [30, -60, 120, -45, 75, 15],
     },
     asset: "ur15.glb",
   },
@@ -394,33 +454,92 @@ export const ROBOT_DEFINITIONS = {
     dof: 6,
     family: "UR Series",
     model: { url: "/models/ur30.glb" },
+    // Velocities follow the UR3e/UR20 entries (same convention in this
+    // codebase). J3 is +/-360 rather than the +/-160 those two carry: the CAD
+    // is authored with the elbow at 165.3 deg, so +/-160 is provably too tight
+    // for this arm. Only the kinematics below are measured.
     joints: [
-      { id: "J1", key: "j1", label: "J1", min: -180, max: 180, default: 0, maxVelocity: 165 },
-      { id: "J2", key: "j2", label: "J2", min: -180, max: 180, default: -65, maxVelocity: 165 },
-      { id: "J3", key: "j3", label: "J3", min: -170, max: 170, default: 100, maxVelocity: 170 },
-      { id: "J4", key: "j4", label: "J4", min: -180, max: 180, default: -60, maxVelocity: 200 },
-      { id: "J5", key: "j5", label: "J5", min: -180, max: 180, default: 65, maxVelocity: 200 },
-      { id: "J6", key: "j6", label: "J6", min: -360, max: 360, default: 0, maxVelocity: 220 },
+      { id: "J1", key: "j1", label: "J1", min: -360, max: 360, default: 0, maxVelocity: 180, type: "revolute", continuous: true },
+      { id: "J2", key: "j2", label: "J2", min: -360, max: 360, default: -90, maxVelocity: 180, type: "revolute", continuous: true },
+      { id: "J3", key: "j3", label: "J3", min: -360, max: 360, default: 90, maxVelocity: 180, type: "revolute", continuous: true },
+      { id: "J4", key: "j4", label: "J4", min: -360, max: 360, default: -90, maxVelocity: 180, type: "revolute", continuous: true },
+      { id: "J5", key: "j5", label: "J5", min: -360, max: 360, default: 90, maxVelocity: 180, type: "revolute", continuous: true },
+      { id: "J6", key: "j6", label: "J6", min: -360, max: 360, default: 0, maxVelocity: 210, type: "revolute", continuous: true },
     ],
+    /**
+     * Measured from frontend/public/models/UR30.step, not taken from a
+     * datasheet. Unlike the UR3e/UR20 STEPs this one is authored posed rather
+     * than straight up, so the axes are not aligned with X/Y/Z and the table
+     * below was solved from the joint bores rather than read off them:
+     * J2 and J3 are parallel 637.00 mm apart, J3 and J4 parallel 503.70 mm
+     * apart, J4/J5 and J5/J6 perpendicular and intersecting. d6 is the
+     * 4896 mm^2 flange plane normal to J6, 154.30 mm past the wrist centre.
+     */
     kinematics: {
-      baseHeight: 110,
-      upperArmLength: 430,
-      forearmLength: 435,
-      wristLength: 160,
-      defaultScale: 0.001,
+      baseHeight: 0.2363,
+      upperArmLength: 0.637,
+      forearmLength: 0.5037,
+      wristLength: 0.201,
+      toolLength: 0.1593,
+      flangeLength: 0.1543,
+      defaultScale: 1,
+      // theta carries the standard UR joint offsets, so joint angles mean what
+      // the teach pendant means: all-zeros is the arm standing straight up.
+      dh: [
+        { joint: 1, theta: 0, a: 0, d: 0.2363, alpha: Math.PI / 2 },
+        { joint: 2, theta: -Math.PI / 2, a: -0.637, d: 0, alpha: 0 },
+        { joint: 3, theta: 0, a: -0.5037, d: 0, alpha: 0 },
+        { joint: 4, theta: -Math.PI / 2, a: 0, d: 0.201, alpha: Math.PI / 2 },
+        { joint: 5, theta: 0, a: 0, d: 0.1593, alpha: -Math.PI / 2 },
+        { joint: 6, theta: 0, a: 0, d: 0.1543, alpha: 0 },
+      ],
+    },
+    /**
+     * Rigging metadata for /models/ur30.glb, converted from UR30.step by
+     * tools/step_to_glb.py, which keeps the CAD assembly intact.
+     *
+     * referencePoseDeg is load-bearing here in a way it is not for the other
+     * robots: the UR30 CAD is authored posed, so the bind offsets have to undo
+     * that pose rather than an all-zero one. Leaving it at zeros scatters the
+     * links. The angles below were solved against the measured bores together
+     * with dhToScene, and put all six axes on them to within 0.008 mm.
+     */
+    articulation: {
+      type: "dh-rig",
+      baseNode: "L0_base",
+      linkNodes: [
+        "L1_shoulder",
+        "L2_upper_arm",
+        "L3_forearm",
+        "L4_wrist_1",
+        "L5_wrist_2",
+        "L6_wrist_3",
+      ],
+      // The CAD pose, not a home pose. J6 is unconstrained by the bores (the
+      // wrist 3 casting is a body of revolution about J6), so it stays at 0.
+      referencePoseDeg: [111, -106, 165.281, -162, -8, 0],
+      // Row-major 3x3: (x, y, z)_dh -> (-x, z, y)_scene
+      dhToScene: [-1, 0, 0, 0, 0, 1, 0, 1, 0],
+      // Flip to true to draw a coloured line through each J1-J6 rotation axis.
+      showJointAxes: false,
     },
     motion: {
-      maxAngularVelocityDegPerSec: 190,
-      accelerationDegPerSec2: 130,
-      smoothing: 0.15,
+      maxAngularVelocityDegPerSec: 180,
+      accelerationDegPerSec2: "TODO: requires verified manufacturer data",
+      smoothing: 0.18,
     },
+    // Payload follows UR's naming convention (UR30 -> 30 kg) and reach is the
+    // catalogue envelope. The rest still needs manufacturer data.
     specifications: {
       payload: 30,
+      payloadKg: 30,
       reach: 1300,
-      repeatability: "±0.05 mm",
-      weight: "47 kg",
+      reachMm: 1300,
+      repeatability: "unknown",
+      weight: "unknown",
       axes: 6,
-      maxTcpSpeed: "3.0 m/s",
+      maxTcpSpeed: "unknown",
+      dof: 6,
     },
     features: {
       vision: false,
@@ -428,8 +547,8 @@ export const ROBOT_DEFINITIONS = {
       collaborative: true,
     },
     presets: {
-      home: [0, -65, 100, -60, 65, 0],
-      demo: [55, -110, 135, -85, 85, 40],
+      home: [0, -90, 90, -90, 90, 0],
+      demo: [30, -60, 120, -45, 75, 15],
     },
     asset: "ur30.glb",
   },
