@@ -1,19 +1,34 @@
 # -*- coding: utf-8 -*-
 """
-UR3e STEP -> GLB converter (FreeCAD 1.1, headless).
+Universal Robots STEP -> GLB converter (FreeCAD 1.1, headless).
 
 Usage (Windows):
+    set STEP2GLB_ROBOT=ur7e
     "%LOCALAPPDATA%\\Programs\\FreeCAD 1.1\\bin\\freecadcmd.exe" tools/step_to_glb.py
 
-Reads  frontend/public/models/UR3e.step
-Writes frontend/public/models/ur3e.glb
-       tools/ur3e_analysis.json   (per-solid report + measured joint bore axes)
+    STEP2GLB_ROBOT     which ROBOTS entry to build (default: ur3e)
+    STEP2GLB_INSPECT   set to 1 to only report the assembly, writing no GLB
+
+Reads  frontend/public/models/<Source>.step
+Writes frontend/public/models/<robot>.glb
+       tools/<robot>_analysis.json   (per-solid report + measured joint bore axes)
 
 The CAD assembly is preserved: one glTF node per link group
 (L0_base .. L6_wrist_3), each holding one child node per original CAD solid.
 Geometry is baked in world coordinates at the pose the CAD was authored in
 (arm straight up), converted from millimetres to metres, Y-up -- already the
-convention shared by this STEP file and glTF.
+convention shared by these STEP files and glTF.
+
+Adding a robot means adding a ROBOTS entry, whose "links" table names the CAD
+products making up each link. Those names are not guessable and differ per
+model: UR3e ships readable ones (Link1_UR3), UR7e ships catalogue numbers
+(C-1000248). Run the inspection pass first and read the assembly off the
+geometry instead of guessing:
+
+    set STEP2GLB_ROBOT=ur7e & set STEP2GLB_INSPECT=1 & freecadcmd tools/step_to_glb.py
+
+It groups the solids by product and orders them along +Y, which is the kinematic
+order for an arm authored straight up.
 
 Two things worth knowing before editing this file:
 
@@ -32,10 +47,74 @@ import json, math, os, struct, sys, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-STEP = os.path.join(ROOT, "frontend", "public", "models", "UR3e.step")
-OUT_GLB = os.path.join(ROOT, "frontend", "public", "models", "ur3e.glb")
-OUT_JSON = os.path.join(HERE, "ur3e_analysis.json")
-FCSTD = os.path.join(HERE, "ur3e.FCStd")   # import cache; safe to delete
+MODELS = os.path.join(ROOT, "frontend", "public", "models")
+
+# "links" entries are (glTF node, material key, [CAD product name fragments]).
+# None means the assembly has not been identified yet: run the inspection pass.
+ROBOTS = {
+    "ur3e": {
+        "step": "UR3e.step",
+        "root": "UR3e",
+        "links": [
+            ("L0_base",      "base",     ["Base_UR3"]),
+            ("L1_shoulder",  "shoulder", ["Link1_UR3"]),
+            ("L2_upper_arm", "upperarm", ["Link2_UR3"]),
+            ("L3_forearm",   "forearm",  ["Link3_UR3"]),
+            ("L4_wrist_1",   "wrist1",   ["Link4_UR3"]),
+            ("L5_wrist_2",   "wrist2",   ["Link5_UR3"]),
+            ("L6_wrist_3",   "wrist3",   ["C-2007033"]),
+        ],
+    },
+    # UR7e names every part by catalogue number, so the mapping below was read
+    # off the geometry (tools/ur7e_solids.json), not off the labels. Each moving
+    # link is pinned by carrying the bores of *both* joints it sits between:
+    #
+    #   J1  axis Y through x=0, z=0        J4  axis Z at Y=979.7
+    #   J2  axis Z at Y=162.5              J5  axis Y through z=133.3
+    #   J3  axis Z at Y=587.5              J6  axis Z at Y=1079.4
+    #
+    # which also states the kinematics: d1=162.5, a2=425, a3=392.2, d4=133.3,
+    # d5=99.7 mm -- UR7e reuses UR5e's link lengths exactly.
+    "ur7e": {
+        "step": "UR7e.step",
+        "root": "UR7e",
+        "links": [
+            # C-1000257 .. C-1000272 is the contiguous block of fixed hardware
+            # bolted to the pedestal (C-1000259): connector panel, clamps, feet.
+            # None of it carries a joint bore, so it all rides with the base.
+            ("L0_base",      "base",     ["C-10002%d" % n for n in range(57, 73)]),
+            ("L1_shoulder",  "shoulder", ["C-1000248"]),
+            ("L2_upper_arm", "upperarm", ["C-1000249"]),
+            ("L3_forearm",   "forearm",  ["C-1000250"]),
+            ("L4_wrist_1",   "wrist1",   ["C-1000251"]),
+            # C-1000274 is a 3 mm plate centred on the J5 axis and coplanar with
+            # the bottom of C-2007861, carrying J5 bores and nothing else, so it
+            # is an interface piece between wrist 1 and wrist 2. It is placed on
+            # the wrist 2 side; if J5 ever shears it away from the housing, move
+            # it to L4_wrist_1 -- those are the only two possibilities.
+            ("L5_wrist_2",   "wrist2",   ["C-2007861", "C-1000274"]),
+            ("L6_wrist_3",   "wrist3",   ["C-2007038"]),
+        ],
+    },
+}
+
+ROBOT = (os.environ.get("STEP2GLB_ROBOT") or "ur3e").strip().lower()
+for _arg in sys.argv[1:]:
+    if _arg.strip().lower() in ROBOTS:
+        ROBOT = _arg.strip().lower()
+if ROBOT not in ROBOTS:
+    raise SystemExit("Unknown robot %r; known: %s" % (ROBOT, ", ".join(sorted(ROBOTS))))
+
+CFG = ROBOTS[ROBOT]
+INSPECT = (os.environ.get("STEP2GLB_INSPECT", "").strip() not in ("", "0")
+           or "--inspect" in sys.argv
+           or CFG["links"] is None)
+
+STEP = os.path.join(MODELS, CFG["step"])
+OUT_GLB = os.path.join(MODELS, ROBOT + ".glb")
+OUT_JSON = os.path.join(HERE, ROBOT + "_analysis.json")
+OUT_SOLIDS = os.path.join(HERE, ROBOT + "_solids.json")
+FCSTD = os.path.join(HERE, ROBOT + ".FCStd")   # import cache; safe to delete
 
 LINEAR_DEFLECTION = 0.30
 ANGULAR_DEFLECTION = 0.50
@@ -67,21 +146,13 @@ else:
     p.SetBool("UseLinkGroup", True)             # keep the assembly tree
     p.SetBool("ImportHiddenObject", True)
     p.SetBool("UseBaseName", True)
-    doc = FreeCAD.newDocument("ur3e")
+    doc = FreeCAD.newDocument(ROBOT)
     StepImporter.insert(STEP, doc.Name)
     doc.recompute()
     doc.saveAs(FCSTD)
     sys.stderr.write("[info] imported STEP in %.1fs (%d objects)\n" % (time.time() - t0, len(doc.Objects)))
 
-LINK_SPECS = [
-    ("L0_base",      "base",     ["Base_UR3"]),
-    ("L1_shoulder",  "shoulder", ["Link1_UR3"]),
-    ("L2_upper_arm", "upperarm", ["Link2_UR3"]),
-    ("L3_forearm",   "forearm",  ["Link3_UR3"]),
-    ("L4_wrist_1",   "wrist1",   ["Link4_UR3"]),
-    ("L5_wrist_2",   "wrist2",   ["Link5_UR3"]),
-    ("L6_wrist_3",   "wrist3",   ["C-2007033"]),
-]
+LINK_SPECS = CFG["links"]
 
 
 def is_solid_feature(o):
@@ -94,24 +165,46 @@ def is_solid_feature(o):
 
 
 features = [o for o in doc.Objects if is_solid_feature(o)]
-assigned, links = set(), []
-for node_name, short, patterns in LINK_SPECS:
-    members = []
-    for o in features:
-        if o.Name in assigned:
-            continue
-        if any(pat.lower() in o.Label.lower() for pat in patterns):
-            members.append(o)
-            assigned.add(o.Name)
-    links.append({"node": node_name, "short": short, "objs": members})
+if not features:
+    raise SystemExit("Refusing to export: %s yielded no solids" % CFG["step"])
 
-orphans = [o.Label for o in features if o.Name not in assigned]
-if orphans:
-    raise SystemExit("Refusing to export: unmapped solids %s" % orphans)
-for L in links:
-    if not L["objs"]:
-        raise SystemExit("Refusing to export: link %s has no geometry" % L["node"])
-sys.stderr.write("[info] %d solids mapped across %d links\n" % (len(features), len(links)))
+
+def product_map(objs):
+    """Map every solid label to the CAD product it is an instance of.
+
+    FreeCAD uniquifies repeats of a product by appending a counter, keeping the
+    first instance unsuffixed ('C-1000248' -> 'C-1000248001'), so the shortest
+    label that prefixes a label is its product. Trimming trailing digits instead
+    works for UR3e ('..._Solid003' -> '..._Solid') but shreds UR7e's catalogue
+    numbers, collapsing the whole arm into a single 'C-' group.
+    """
+    labels = sorted(set(o.Label for o in objs))
+    return dict((l, min((b for b in labels if l.startswith(b)), key=len)) for l in labels)
+
+
+PRODUCTS = product_map(features)
+
+
+def product_of(label):
+    return PRODUCTS.get(label, label)
+
+
+def merged_bbox(objs):
+    """Bounding box over a whole product, world mm.
+
+    OCC's box is conservative: it bounds the control polygons of the surfaces,
+    not the surfaces, so a cylinder of radius R can report +-2R (the UR7e base
+    measures +-151 here and +-75.5 once meshed). Good enough to order links
+    along the arm, useless as a dimension -- identify links by their bores.
+    """
+    bb = objs[0].Shape.BoundBox
+    lo = [bb.XMin, bb.YMin, bb.ZMin]
+    hi = [bb.XMax, bb.YMax, bb.ZMax]
+    for o in objs[1:]:
+        b = o.Shape.BoundBox
+        lo = [min(lo[0], b.XMin), min(lo[1], b.YMin), min(lo[2], b.ZMin)]
+        hi = [max(hi[0], b.XMax), max(hi[1], b.YMax), max(hi[2], b.ZMax)]
+    return [round(v, 2) for v in lo], [round(v, 2) for v in hi]
 
 
 def cylinder_report(shape):
@@ -132,6 +225,61 @@ def cylinder_report(shape):
                     "center": [round(ce.x, 3), round(ce.y, 3), round(ce.z, 3)]})
     out.sort(key=lambda d: -d["area"])
     return out[:6]
+
+
+if INSPECT:
+    # Identifying an assembly only needs placement and bores, so no meshing here:
+    # this pass answers "which product is which link" in seconds, not minutes.
+    groups = {}
+    for o in features:
+        groups.setdefault(product_of(o.Label), []).append(o)
+
+    report = []
+    for name, objs in groups.items():
+        lo, hi = merged_bbox(objs)
+        report.append({"product": name, "solids": len(objs),
+                       "labels": sorted(o.Label for o in objs),
+                       "bbox_mm": {"min": lo, "max": hi},
+                       "y_span_mm": [lo[1], hi[1]],
+                       "cylinders": cylinder_report(objs[0].Shape)})
+    report.sort(key=lambda r: r["y_span_mm"][0])
+
+    with open(OUT_SOLIDS, "w") as fh:
+        json.dump({"robot": ROBOT, "source_step": STEP,
+                   "total_solids": len(features), "products": report}, fh, indent=2)
+
+    sys.stderr.write("\n%-44s %6s  %-18s %s\n"
+                     % ("PRODUCT (ordered along +Y)", "SOLIDS", "Y SPAN mm", "BBOX min -> max mm (loose)"))
+    for r in report:
+        sys.stderr.write("%-44s %6d  %-18s %s -> %s\n"
+                         % (r["product"][:44], r["solids"],
+                            "%.1f .. %.1f" % (r["y_span_mm"][0], r["y_span_mm"][1]),
+                            r["bbox_mm"]["min"], r["bbox_mm"]["max"]))
+    sys.stderr.write("\n[DONE] inspection only, no GLB written -> %s\n" % OUT_SOLIDS)
+    if CFG["links"] is None:
+        sys.stderr.write("[next] add a \"links\" table for %r to ROBOTS, then re-run "
+                         "without STEP2GLB_INSPECT\n" % ROBOT)
+    sys.exit(0)
+
+
+assigned, links = set(), []
+for node_name, short, patterns in LINK_SPECS:
+    members = []
+    for o in features:
+        if o.Name in assigned:
+            continue
+        if any(pat.lower() in o.Label.lower() for pat in patterns):
+            members.append(o)
+            assigned.add(o.Name)
+    links.append({"node": node_name, "short": short, "objs": members})
+
+orphans = sorted(set(product_of(o.Label) for o in features if o.Name not in assigned))
+if orphans:
+    raise SystemExit("Refusing to export: unmapped products %s" % orphans)
+for L in links:
+    if not L["objs"]:
+        raise SystemExit("Refusing to export: link %s has no geometry" % L["node"])
+sys.stderr.write("[info] %d solids mapped across %d links\n" % (len(features), len(links)))
 
 
 COLOR_SOURCE = {"step": 0, "default": 0}
@@ -262,7 +410,7 @@ class Glb(object):
 
     def write(self, path, scene_nodes):
         gltf = {"asset": {"version": "2.0",
-                          "generator": "FreeCAD 1.1.3 STEP to GLB, UR3e assembly preserving"},
+                          "generator": "FreeCAD 1.1.3 STEP to GLB, %s assembly preserving" % CFG["root"]},
                 "scene": 0, "scenes": [{"nodes": scene_nodes}],
                 "nodes": self.nodes, "meshes": self.meshes,
                 "materials": self.materials, "accessors": self.accessors,
@@ -302,7 +450,7 @@ analysis = {"source_step": STEP, "units": "metres", "up_axis": "+Y",
             "angular_deflection_rad": ANGULAR_DEFLECTION,
             "crease_angle_deg": 35.0, "links": []}
 root_children = []
-glb.nodes.append({"name": "UR3e", "children": root_children})
+glb.nodes.append({"name": CFG["root"], "children": root_children})
 
 total_tris = 0
 t0 = time.time()

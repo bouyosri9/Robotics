@@ -95,6 +95,107 @@ export const ROBOT_DEFINITIONS = {
     },
     asset: "ur3e.glb",
   },
+  ur7e: {
+    id: "ur7e",
+    manufacturer: "Universal Robots",
+    name: "UR7e",
+    dof: 6,
+    family: "e-Series",
+    model: { url: "/models/ur7e.glb" },
+    // Limits and velocities follow the UR3e entry above (same e-Series
+    // convention in this codebase); only the kinematics below are measured.
+    joints: [
+      { id: "J1", key: "j1", label: "J1", min: -360, max: 360, default: 0, maxVelocity: 180, type: "revolute", continuous: true },
+      { id: "J2", key: "j2", label: "J2", min: -360, max: 360, default: -90, maxVelocity: 180, type: "revolute", continuous: true },
+      { id: "J3", key: "j3", label: "J3", min: -160, max: 160, default: 90, maxVelocity: 180, type: "revolute" },
+      { id: "J4", key: "j4", label: "J4", min: -360, max: 360, default: -90, maxVelocity: 180, type: "revolute", continuous: true },
+      { id: "J5", key: "j5", label: "J5", min: -360, max: 360, default: 90, maxVelocity: 180, type: "revolute", continuous: true },
+      { id: "J6", key: "j6", label: "J6", min: -360, max: 360, default: 0, maxVelocity: 210, type: "revolute", continuous: true },
+    ],
+    /**
+     * Measured from frontend/public/models/UR7e.step, not taken from a
+     * datasheet. The joint bores in the CAD put J2 at Y=162.5, J3 at Y=587.5,
+     * J4 at Y=979.7 and J6 at Y=1079.4 mm, with the J5 axis offset 133.3 mm and
+     * the flange face 99.6 mm past the wrist centre, giving the table below.
+     * Those are UR5e's link lengths exactly, so UR7e shares the UR5e reach.
+     */
+    kinematics: {
+      baseHeight: 0.1625,
+      upperArmLength: 0.425,
+      forearmLength: 0.3922,
+      wristLength: 0.1333,
+      toolLength: 0.0997,
+      flangeLength: 0.0996,
+      defaultScale: 1,
+      // theta carries the standard UR joint offsets, so joint angles mean what
+      // the teach pendant means: all-zeros is the arm standing straight up.
+      dh: [
+        { joint: 1, theta: 0, a: 0, d: 0.1625, alpha: Math.PI / 2 },
+        { joint: 2, theta: -Math.PI / 2, a: -0.425, d: 0, alpha: 0 },
+        { joint: 3, theta: 0, a: -0.3922, d: 0, alpha: 0 },
+        { joint: 4, theta: -Math.PI / 2, a: 0, d: 0.1333, alpha: Math.PI / 2 },
+        { joint: 5, theta: 0, a: 0, d: 0.0997, alpha: -Math.PI / 2 },
+        { joint: 6, theta: 0, a: 0, d: 0.0996, alpha: 0 },
+      ],
+    },
+    /**
+     * Rigging metadata for /models/ur7e.glb, converted from UR7e.step by
+     * tools/step_to_glb.py, which keeps the CAD assembly intact.
+     *
+     * Same scheme as UR3e, with one difference: the UR7e STEP was authored with
+     * the arm facing the opposite way, so dhToScene is the UR3e matrix turned
+     * 180 degrees about Y. Reusing the UR3e matrix unchanged places the J5 axis
+     * 266.6 mm off (twice the 133.3 mm offset, mirrored), which would swing the
+     * whole wrist about a line that misses the real one. With the matrix below
+     * all six axes land on the bores measured from the STEP to 0.00 mm.
+     */
+    articulation: {
+      type: "dh-rig",
+      baseNode: "L0_base",
+      linkNodes: [
+        "L1_shoulder",
+        "L2_upper_arm",
+        "L3_forearm",
+        "L4_wrist_1",
+        "L5_wrist_2",
+        "L6_wrist_3",
+      ],
+      referencePoseDeg: [0, 0, 0, 0, 0, 0],
+      // Row-major 3x3: (x, y, z)_dh -> (x, z, -y)_scene
+      dhToScene: [1, 0, 0, 0, 0, 1, 0, -1, 0],
+      // Flip to true to draw a coloured line through each J1-J6 rotation axis.
+      showJointAxes: false,
+    },
+    motion: {
+      maxAngularVelocityDegPerSec: 180,
+      accelerationDegPerSec2: "TODO: requires verified manufacturer data",
+      smoothing: 0.18,
+    },
+    // Reach follows from the measured link lengths being UR5e's. Payload
+    // follows UR's naming convention (UR3e -> 3 kg, UR5e -> 5 kg). The rest
+    // still needs manufacturer data rather than a guess.
+    specifications: {
+      payload: 7,
+      payloadKg: 7,
+      reach: 850,
+      reachMm: 850,
+      repeatability: "unknown",
+      weight: "unknown",
+      axes: 6,
+      maxTcpSpeed: "unknown",
+      dof: 6,
+    },
+    features: {
+      vision: false,
+      ai: false,
+      collaborative: true,
+    },
+    presets: {
+      home: [0, -90, 90, -90, 90, 0],
+      demo: [30, -60, 120, -45, 75, 15],
+    },
+    asset: "ur7e.glb",
+  },
   ur5e: {
     id: "ur5e",
     manufacturer: "Universal Robots",

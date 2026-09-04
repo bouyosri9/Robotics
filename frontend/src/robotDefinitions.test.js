@@ -5,6 +5,7 @@ import { ROBOT_DEFINITIONS, ROBOT_LIST, getRobotDefinition } from './robotDefini
 
 const EXPECTED_ROBOTS = [
   'ur3e',
+  'ur7e',
   'ur5e',
   'ur10e',
   'ur15',
@@ -20,7 +21,7 @@ const EXPECTED_ROBOTS = [
 
 test('all robot IDs are unique and complete', () => {
   const ids = ROBOT_LIST.map((robot) => robot.id);
-  assert.equal(ids.length, 12);
+  assert.equal(ids.length, 13);
   assert.deepEqual(ids.sort(), EXPECTED_ROBOTS.sort());
   assert.equal(new Set(ids).size, ids.length);
 });
@@ -56,6 +57,34 @@ test('UR3e matches official manufacturer data', () => {
   assert.equal(robot.joints[3].maxVelocity, 360);
   assert.equal(robot.joints[4].maxVelocity, 360);
   assert.equal(robot.joints[5].maxVelocity, 360);
+});
+
+test('UR7e matches the geometry measured from its STEP file', () => {
+  const robot = ROBOT_DEFINITIONS.ur7e;
+  assert.equal(robot.dof, 6);
+  // Read off the joint bores in UR7e.step: J2 at Y=162.5, J3 at Y=587.5,
+  // J4 at Y=979.7, J5 offset 133.3, J6 at Y=1079.4, flange 99.6 past the wrist.
+  assert.deepEqual(robot.kinematics.dh.map((item) => Number(item.a.toFixed(5))), [0, -0.425, -0.3922, 0, 0, 0]);
+  assert.deepEqual(robot.kinematics.dh.map((item) => Number(item.d.toFixed(5))), [0.1625, 0, 0, 0.1333, 0.0997, 0.0996]);
+  assert.deepEqual(robot.kinematics.dh.map((item) => Number(item.alpha.toFixed(5))), [1.5708, 0, 0, 1.5708, -1.5708, 0]);
+  // Same link lengths as UR5e, so the reach has to agree with that entry.
+  assert.equal(robot.specifications.reachMm, ROBOT_DEFINITIONS.ur5e.specifications.reach);
+
+  // The UR7e STEP is authored facing the opposite way to the UR3e one. Reusing
+  // UR3e's matrix here would put the J5 axis 266.6 mm off and swing the wrist
+  // about a line that misses the real one, so the 180-degree turn is load-bearing.
+  assert.deepEqual(robot.articulation.dhToScene, [1, 0, 0, 0, 0, 1, 0, -1, 0]);
+  assert.notDeepEqual(robot.articulation.dhToScene, ROBOT_DEFINITIONS.ur3e.articulation.dhToScene);
+  assert.deepEqual(robot.articulation.referencePoseDeg, [0, 0, 0, 0, 0, 0]);
+  assert.equal(robot.articulation.baseNode, 'L0_base');
+  assert.deepEqual(robot.articulation.linkNodes, [
+    'L1_shoulder',
+    'L2_upper_arm',
+    'L3_forearm',
+    'L4_wrist_1',
+    'L5_wrist_2',
+    'L6_wrist_3',
+  ]);
 });
 
 test('all robots have valid joint metadata', () => {
