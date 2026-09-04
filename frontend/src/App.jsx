@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from "react";
+import { ChevronRight, Hexagon } from "lucide-react";
 import RobotCatalog from "./RobotCatalog";
 import RobotSimulator from "./RobotSimulator";
-import { getRobotDefinition } from "./robotDefinitions";
+import { getRobotDefinition, MANUFACTURER_ACCENTS } from "./robotDefinitions";
+import "./App.css";
 
 function readRobotFromLocation() {
   if (typeof window === "undefined") return null;
@@ -33,59 +35,57 @@ export default function App() {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
+  // The accent follows the manufacturer of whatever is on screen, so the whole
+  // chrome (header mark, sliders, hover states) shifts with the brand.
+  const accent = selectedRobot
+    ? MANUFACTURER_ACCENTS[selectedRobot.manufacturer] || MANUFACTURER_ACCENTS.default
+    : MANUFACTURER_ACCENTS.default;
+
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "#05070a",
-        padding: "24px",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-      }}
-    >
-      <div style={{ width: "100%", maxWidth: "1100px" }}>
+    <div className="shell" style={{ "--accent": accent }}>
+      <header className="topbar">
+        <button
+          className="brand"
+          onClick={() => applyRobotSelection(null)}
+          title="Retour au catalogue"
+        >
+          <span className="brand__mark">
+            <Hexagon size={15} strokeWidth={2.2} />
+          </span>
+          <span>
+            <span className="brand__name">Cobot Studio</span>
+            <span className="brand__sub" style={{ display: "block" }}>
+              Simulateur collaboratif
+            </span>
+          </span>
+        </button>
+
+        {selectedRobot && (
+          <nav className="crumbs" aria-label="Fil d'ariane">
+            <span>{selectedRobot.manufacturer}</span>
+            <ChevronRight size={13} />
+            <span className="crumbs__current">{selectedRobot.name}</span>
+          </nav>
+        )}
+
+        <span className="topbar__spacer" />
+
+        <span className="chip">
+          <span className="dot" style={{ color: "var(--accent)" }} />
+          {selectedRobot ? `${selectedRobot.dof ?? 6} axes` : "Catalogue"}
+        </span>
+      </header>
+
+      <main className="main">
         {!selectedRobot ? (
           <RobotCatalog onSelectRobot={applyRobotSelection} />
         ) : (
-          <div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: "12px",
-                padding: "0 4px",
-              }}
-            >
-              <button
-                onClick={() => applyRobotSelection(null)}
-                style={{
-                  background: "none",
-                  border: "1px solid #1c2430",
-                  color: "#8b95a3",
-                  fontSize: "12px",
-                  padding: "8px 14px",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                }}
-              >
-                ← Changer de robot
-              </button>
-              <div
-                style={{
-                  fontFamily: "monospace",
-                  fontSize: "12px",
-                  color: "#6b7684",
-                }}
-              >
-                {selectedRobot.manufacturer} — {selectedRobot.name}
-              </div>
-            </div>
-            <RobotSimulator selectedRobot={selectedRobot} onBack={() => applyRobotSelection(null)} />
-          </div>
+          <RobotSimulator
+            selectedRobot={selectedRobot}
+            onBack={() => applyRobotSelection(null)}
+          />
         )}
-      </div>
+      </main>
     </div>
   );
 }

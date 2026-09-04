@@ -1,8 +1,29 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import {
+  AlertTriangle,
+  ChevronLeft,
+  Home,
+  Move3d,
+  Pause,
+  Play,
+  RotateCcw,
+  Square,
+} from "lucide-react";
 import RobotCanvas3D from "./RobotCanvas3D";
 import { useRobotSocket } from "./useRobotSocket";
-import { getDefaultJointValues } from "./robotDefinitions";
+import { getDefaultJointValues, getManufacturerAccent } from "./robotDefinitions";
 import { computeRobotFkFromDefinition } from "./forwardKinematics";
+
+const TRANSPORT = [
+  { command: "start", label: "Start", Icon: Play, tone: "var(--ok)" },
+  { command: "pause", label: "Pause", Icon: Pause, tone: "var(--warn)" },
+  { command: "home", label: "Home", Icon: Home, tone: "var(--accent)" },
+  { command: "stop", label: "Stop", Icon: Square, tone: "var(--danger)" },
+];
+
+function isKnown(value) {
+  return value != null && value !== "unknown" && value !== "";
+}
 
 export default function RobotSimulator({ selectedRobot, onBack }) {
   const robot = selectedRobot;
@@ -73,6 +94,13 @@ export default function RobotSimulator({ selectedRobot, onBack }) {
     [sendJoints]
   );
 
+  const resetJoints = useCallback(() => {
+    if (!robot?.joints) return;
+    const pose = getDefaultJointValues(robot);
+    setOverrides(pose);
+    sendJoints(pose);
+  }, [robot, sendJoints]);
+
   // Le backend calcule un TCP planaire à 3 segments avec les cotes du robot
   // générique, en millimètres. Quand la définition fournit une table DH, on
   // calcule le TCP réel côté client (en mètres) et on l'affiche en millimètres.
@@ -84,95 +112,194 @@ export default function RobotSimulator({ selectedRobot, onBack }) {
     return state?.tcp ? { ...state.tcp, exact: false } : null;
   }, [robot, displayJoints, state?.tcp]);
 
+  if (!robot) {
+    return <div className="empty">Aucun robot sélectionné.</div>;
+  }
+
+  const notice = lastError
+    ? { text: lastError, tone: "var(--danger)" }
+    : connected && !robotSynced
+      ? {
+          text: `Backend sur « ${state?.robotName} » — configuration ${robot.name} en cours…`,
+          tone: "var(--warn)",
+        }
+      : null;
+
+  const specs = robot.specifications || {};
+  const specRows = [
+    { key: "Portée", value: isKnown(specs.reach) ? `${specs.reach} mm` : null },
+    { key: "Charge utile", value: isKnown(specs.payload) ? `${specs.payload} kg` : null },
+    { key: "Répétabilité", value: isKnown(specs.repeatability) ? specs.repeatability : null },
+    {
+      key: "Masse",
+      value: isKnown(specs.weight)
+        ? typeof specs.weight === "number"
+          ? `${specs.weight} kg`
+          : specs.weight
+        : null,
+    },
+  ].filter((row) => row.value);
+
   const renderSlider = (joint) => {
-    const value = displayJoints[joint.key] ?? joint.default;
+    const value = displayJoints[joint.key] ?? joint.default ?? 0;
+    const fill = ((value - joint.min) / (joint.max - joint.min)) * 100;
+
     return (
-      <div key={joint.key} style={{ marginBottom: "14px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "#8b95a3", marginBottom: "4px", fontFamily: "sans-serif" }}>
-          <span>{joint.label}</span>
-          <span>{Math.round(value)}°</span>
+      <div className="joint" key={joint.key}>
+        <div className="joint__head">
+          <span className="joint__label">
+            {joint.label}
+            {joint.continuous && (
+              <span style={{ color: "var(--text-faint)", fontWeight: 400 }}> · continu</span>
+            )}
+          </span>
+          <span className="joint__value">{Math.round(value)}°</span>
         </div>
         <input
+          className="joint__range"
+          style={{ "--fill": `${Math.min(100, Math.max(0, fill))}%` }}
           type="range"
           min={joint.min}
           max={joint.max}
           step="1"
           value={value}
-          onChange={(e) => handleJointChange(joint.key, e.target.value)}
-          style={{ width: "100%", accentColor: "#0ea5e9", background: "#1c2430", height: "6px", borderRadius: "3px", outline: "none", cursor: "pointer" }}
+          aria-label={`Articulation ${joint.label}`}
+          onChange={(event) => handleJointChange(joint.key, event.target.value)}
         />
+        <div className="joint__limits">
+          <span>{joint.min}°</span>
+          <span>{joint.max}°</span>
+        </div>
       </div>
     );
   };
 
-  if (!robot) {
-    return <div style={{ color: "#fff", padding: "20px", textAlign: "center" }}>Aucun robot sélectionné.</div>;
-  }
-
-  const notice = lastError
-    ? { text: lastError, color: "#f87171", border: "#ef4444", background: "rgba(239, 68, 68, 0.1)" }
-    : connected && !robotSynced
-      ? { text: `Backend sur "${state?.robotName}" — configuration ${robot.name} en cours...`, color: "#fbbf24", border: "#f59e0b", background: "rgba(245, 158, 11, 0.1)" }
-      : null;
-
   return (
-    <div style={{ display: "flex", height: "85vh", background: "#0c1017", borderRadius: "12px", border: "1px solid #1c2430", overflow: "hidden" }}>
-      <div style={{ width: "340px", background: "#0c1017", borderRight: "1px solid #1c2430", display: "flex", flexDirection: "column" }}>
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid #1c2430", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            <div style={{ fontSize: "11px", color: "#0ea5e9", fontWeight: "bold", letterSpacing: "1px", marginBottom: "2px" }}>⚙️ ROBOT SIMULATOR</div>
-            <div style={{ fontSize: "12px", color: "#6b7684" }}>MODEL: <span style={{ color: "#fff" }}>{robot.name}</span></div>
-          </div>
-          <button onClick={onBack} style={{ background: "#161b22", border: "1px solid #30363d", color: "#c9d1d9", padding: "5px 10px", borderRadius: "6px", fontSize: "11px", cursor: "pointer" }}>Back</button>
+    <div className="sim" style={{ "--accent": getManufacturerAccent(robot.manufacturer) }}>
+      <aside className="panel">
+        <div className="panel__head">
+          <button className="btn btn--ghost btn--sm" onClick={onBack}>
+            <ChevronLeft size={14} />
+            Catalogue
+          </button>
+          <span className={`chip ${connected ? "chip--ok" : "chip--off"}`}>
+            <span className={`dot ${connected ? "dot--live" : ""}`} />
+            {connected ? displayStatus : "hors ligne"}
+          </span>
         </div>
 
-        <div style={{ padding: "20px", flex: 1, overflowY: "auto" }}>
-          <div style={{ marginBottom: "20px" }}>
-            <label style={{ fontSize: "10px", color: "#6b7684", display: "block", marginBottom: "6px", letterSpacing: "0.5px" }}>STATUS</label>
-            <div style={{ background: connected ? "rgba(16, 185, 129, 0.1)" : "rgba(239, 68, 68, 0.1)", border: `1px solid ${connected ? "#10b981" : "#ef4444"}`, color: connected ? "#34d399" : "#f87171", padding: "10px 14px", borderRadius: "8px", fontSize: "12px", fontWeight: "500", display: "flex", alignItems: "center" }}>
-              <div style={{ width: "8px", height: "8px", background: connected ? "#34d399" : "#f87171", borderRadius: "50%", marginRight: "10px", boxShadow: `0 0 8px ${connected ? "#34d399" : "#f87171"}` }} />
-              {connected ? `Connected (${displayStatus})` : "Hors ligne - simulation locale"}
+        <div className="panel__body">
+          <div>
+            <div className="section__head">
+              <span className="section__title">Modèle</span>
+              <span className="chip chip--accent">{robot.manufacturer}</span>
             </div>
+            <div style={{ fontSize: "20px", fontWeight: 650, letterSpacing: "-0.02em" }}>
+              {robot.name}
+            </div>
+            <div className="card__family">
+              {robot.family} · {robot.dof ?? 6} axes
+            </div>
+
             {notice && (
-              <div style={{ marginTop: "8px", background: notice.background, border: `1px solid ${notice.border}`, color: notice.color, padding: "8px 12px", borderRadius: "8px", fontSize: "11px", lineHeight: 1.45 }}>
-                {notice.text}
+              <div className="notice" style={{ "--tone": notice.tone, marginTop: "12px" }}>
+                <AlertTriangle size={14} />
+                <span>{notice.text}</span>
+              </div>
+            )}
+            {!connected && !notice && (
+              <div className="notice" style={{ "--tone": "var(--text-faint)", marginTop: "12px" }}>
+                <AlertTriangle size={14} />
+                <span>Backend injoignable — simulation locale, cinématique calculée dans le navigateur.</span>
               </div>
             )}
           </div>
 
-          <div style={{ marginBottom: "20px" }}>
-            <label style={{ fontSize: "10px", color: "#6b7684", display: "block", marginBottom: "14px", letterSpacing: "0.5px" }}>JOINTS (°)</label>
+          <div>
+            <div className="section__head">
+              <span className="section__title">Articulations (°)</span>
+              <button className="btn btn--ghost btn--sm" onClick={resetJoints} title="Pose par défaut">
+                <RotateCcw size={12} />
+                Reset
+              </button>
+            </div>
             {robot.joints?.map((joint) => renderSlider(joint))}
           </div>
 
           {tcp && (
-            <div style={{ marginBottom: "20px" }}>
-              <label style={{ fontSize: "10px", color: "#6b7684", display: "block", marginBottom: "6px", letterSpacing: "0.5px" }}>
-                TCP POSITION (mm){tcp.exact ? " - DH" : " - approx."}
-              </label>
-              <div style={{ background: "rgba(14, 165, 233, 0.1)", border: "1px solid #0ea5e9", color: "#38bdf8", padding: "10px 14px", borderRadius: "8px", fontSize: "11px", fontFamily: "monospace" }}>
-                <div>X: {tcp.x.toFixed(1)}</div>
-                <div>Y: {tcp.y.toFixed(1)}</div>
-                <div>Z: {tcp.z.toFixed(1)}</div>
+            <div>
+              <div className="section__head">
+                <span className="section__title">Position TCP (mm)</span>
+                <span className="chip">{tcp.exact ? "DH" : "approx."}</span>
+              </div>
+              <div className="tcp">
+                {["x", "y", "z"].map((axis) => (
+                  <div className="tcp__cell" key={axis}>
+                    <div className="tcp__axis">{axis.toUpperCase()}</div>
+                    <div className="tcp__num">{tcp[axis].toFixed(1)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {specRows.length > 0 && (
+            <div>
+              <div className="section__head">
+                <span className="section__title">Caractéristiques</span>
+              </div>
+              <div className="rows">
+                {specRows.map((row) => (
+                  <div className="row" key={row.key}>
+                    <span className="row__key">{row.key}</span>
+                    <span className="row__val">{row.value}</span>
+                  </div>
+                ))}
               </div>
             </div>
           )}
         </div>
 
-        <div style={{ padding: "16px 20px", borderTop: "1px solid #1c2430", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", background: "#0c1017" }}>
-          <button onClick={() => sendCommand("start")} style={{ background: "#10b981", color: "white", border: "none", padding: "10px", borderRadius: "8px", fontSize: "13px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>▶ Start</button>
-          <button onClick={() => sendCommand("pause")} style={{ background: "#f59e0b", color: "white", border: "none", padding: "10px", borderRadius: "8px", fontSize: "13px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>❚❚ Pause</button>
-          <button onClick={() => sendCommand("home")} style={{ background: "#0ea5e9", color: "white", border: "none", padding: "10px", borderRadius: "8px", fontSize: "13px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>🏠 Home</button>
-          <button onClick={() => sendCommand("stop")} style={{ background: "#ef4444", color: "white", border: "none", padding: "10px", borderRadius: "8px", fontSize: "13px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>⏹ Stop</button>
+        <div className="panel__foot">
+          <div className="transport">
+            {TRANSPORT.map(({ command, label, Icon, tone }) => (
+              <button
+                key={command}
+                className="btn btn--tone"
+                style={{ "--tone": tone }}
+                onClick={() => sendCommand(command)}
+              >
+                <Icon size={15} />
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      </aside>
 
-      <div style={{ flex: 1, background: "#0b0f17", position: "relative", overflow: "hidden" }}>
-        <RobotCanvas3D joints={displayJoints} assetFile={robot.model?.url || robot.asset} robotName={robot.name} robot={robot} />
-        <div style={{ position: "absolute", top: "16px", right: "24px", fontSize: "12px", color: "#6b7684", fontFamily: "monospace" }}>
-          {robot.manufacturer} — {robot.name}
+      <section className="viewport">
+        <div className="viewport__canvas">
+          <RobotCanvas3D
+            joints={displayJoints}
+            assetFile={robot.model?.url || robot.asset}
+            robotName={robot.name}
+            robot={robot}
+          />
         </div>
-      </div>
+
+        <div className="viewport__hud viewport__hud--tl">
+          <span className="hud-pill">
+            <strong>{robot.name}</strong> · {robot.manufacturer}
+          </span>
+        </div>
+
+        <div className="viewport__hud viewport__hud--br">
+          <span className="hud-pill">
+            <Move3d size={13} />
+            Glisser pour orbiter · molette pour zoomer
+          </span>
+        </div>
+      </section>
     </div>
   );
 }

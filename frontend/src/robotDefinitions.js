@@ -899,6 +899,20 @@ export const ROBOT_DEFINITIONS = {
 
 export const ROBOT_LIST = Object.values(ROBOT_DEFINITIONS);
 
+/**
+ * Accent colour per manufacturer. The UI derives every brand-tinted surface
+ * from this map, so a new manufacturer only needs one entry here.
+ */
+export const MANUFACTURER_ACCENTS = {
+  JAKA: "#22b8cf",
+  "Universal Robots": "#ff8a3d",
+  default: "#4dabf7",
+};
+
+export function getManufacturerAccent(manufacturer) {
+  return MANUFACTURER_ACCENTS[manufacturer] || MANUFACTURER_ACCENTS.default;
+}
+
 export function getRobotDefinition(robotId) {
   return ROBOT_DEFINITIONS[robotId] || ROBOT_DEFINITIONS.ur5e;
 }
@@ -915,7 +929,7 @@ export function getRobotBrandGroups() {
   return ROBOT_LIST.reduce((groups, robot) => {
     const key = robot.manufacturer;
     if (!groups[key]) {
-      groups[key] = { name: key, accent: robot.manufacturer === "JAKA" ? "#18a0c9" : "#ff8a3d", robots: [] };
+      groups[key] = { name: key, accent: getManufacturerAccent(key), robots: [] };
     }
     groups[key].robots.push(robot);
     return groups;
