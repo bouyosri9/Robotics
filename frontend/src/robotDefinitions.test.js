@@ -173,6 +173,37 @@ test('UR15 matches the geometry solved from its posed STEP file', () => {
   ]);
 });
 
+test('UR10e matches the geometry measured from its STEP file', () => {
+  const robot = ROBOT_DEFINITIONS.ur10e;
+  assert.equal(robot.dof, 6);
+  // Read off the joint bores in UR10e.step: J2 at Y=180.70, J3 at Y=793.40,
+  // J4 at Y=1364.95, J5 offset 174.15, J6 at Y=1484.80, flange 116.55 past it.
+  assert.deepEqual(robot.kinematics.dh.map((item) => Number(item.a.toFixed(5))), [0, -0.6127, -0.57155, 0, 0, 0]);
+  assert.deepEqual(robot.kinematics.dh.map((item) => Number(item.d.toFixed(5))), [0.1807, 0, 0, 0.17415, 0.11985, 0.11655]);
+  assert.deepEqual(robot.kinematics.dh.map((item) => Number(item.alpha.toFixed(5))), [1.5708, 0, 0, 1.5708, -1.5708, 0]);
+  assert.equal(robot.specifications.reachMm, 1300);
+
+  // Authored the same way round as the UR5e, and straight up, so it takes the
+  // UR5e matrix with an all-zero pose -- unlike the posed UR15/UR30 entries.
+  assert.deepEqual(robot.articulation.dhToScene, ROBOT_DEFINITIONS.ur5e.articulation.dhToScene);
+  assert.notDeepEqual(robot.articulation.dhToScene, ROBOT_DEFINITIONS.ur3e.articulation.dhToScene);
+  assert.deepEqual(robot.articulation.referencePoseDeg, [0, 0, 0, 0, 0, 0]);
+  assert.equal(robot.articulation.baseNode, 'L0_base');
+  assert.deepEqual(robot.articulation.linkNodes, [
+    'L1_shoulder',
+    'L2_upper_arm',
+    'L3_forearm',
+    'L4_wrist_1',
+    'L5_wrist_2',
+    'L6_wrist_3',
+  ]);
+
+  // Longer arm than the UR5e it shares an orientation with, shorter than UR20.
+  const span = (r) => r.kinematics.dh.reduce((t, i) => t + Math.abs(i.a) + Math.abs(i.d), 0);
+  assert.ok(span(robot) > span(ROBOT_DEFINITIONS.ur5e));
+  assert.ok(span(robot) < span(ROBOT_DEFINITIONS.ur20));
+});
+
 test('all robots have valid joint metadata', () => {
   for (const robot of ROBOT_LIST) {
     assert.ok(robot.name, `${robot.id} missing name`);

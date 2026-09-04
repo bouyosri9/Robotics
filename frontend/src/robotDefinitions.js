@@ -202,33 +202,93 @@ export const ROBOT_DEFINITIONS = {
     dof: 6,
     family: "e-Series",
     model: { url: "/models/ur10e.glb" },
+    // Limits and velocities follow the UR3e/UR5e entries (same e-Series
+    // convention in this codebase); only the kinematics below are measured.
     joints: [
-      { id: "J1", key: "j1", label: "J1", min: -180, max: 180, default: 0, maxVelocity: 150 },
-      { id: "J2", key: "j2", label: "J2", min: -180, max: 180, default: -55, maxVelocity: 150 },
-      { id: "J3", key: "j3", label: "J3", min: -170, max: 170, default: 82, maxVelocity: 150 },
-      { id: "J4", key: "j4", label: "J4", min: -180, max: 180, default: -45, maxVelocity: 180 },
-      { id: "J5", key: "j5", label: "J5", min: -180, max: 180, default: 50, maxVelocity: 180 },
-      { id: "J6", key: "j6", label: "J6", min: -360, max: 360, default: 0, maxVelocity: 210 },
+      { id: "J1", key: "j1", label: "J1", min: -360, max: 360, default: 0, maxVelocity: 180, type: "revolute", continuous: true },
+      { id: "J2", key: "j2", label: "J2", min: -360, max: 360, default: -90, maxVelocity: 180, type: "revolute", continuous: true },
+      { id: "J3", key: "j3", label: "J3", min: -160, max: 160, default: 90, maxVelocity: 180, type: "revolute" },
+      { id: "J4", key: "j4", label: "J4", min: -360, max: 360, default: -90, maxVelocity: 180, type: "revolute", continuous: true },
+      { id: "J5", key: "j5", label: "J5", min: -360, max: 360, default: 90, maxVelocity: 180, type: "revolute", continuous: true },
+      { id: "J6", key: "j6", label: "J6", min: -360, max: 360, default: 0, maxVelocity: 210, type: "revolute", continuous: true },
     ],
+    /**
+     * Measured from frontend/public/models/UR10e.step, not taken from a
+     * datasheet. The joint bores in the CAD put J2 at Y=180.70, J3 at Y=793.40,
+     * J4 at Y=1364.95 and J6 at Y=1484.80 mm, with the J5 axis offset 174.15 mm
+     * and the flange face 116.55 mm past the wrist centre, giving the table
+     * below -- the published UR10e link lengths.
+     *
+     * That identification matters: this CAD arrived under the name UR12e.step
+     * and was renamed by hand. The lengths above are UR10e's, not UR12e's
+     * (which is a shorter arm), so the geometry, not the filename, is what
+     * says which robot this is.
+     */
     kinematics: {
-      baseHeight: 90,
-      upperArmLength: 350,
-      forearmLength: 360,
-      wristLength: 120,
-      defaultScale: 0.001,
+      baseHeight: 0.1807,
+      upperArmLength: 0.6127,
+      forearmLength: 0.57155,
+      wristLength: 0.17415,
+      toolLength: 0.11985,
+      flangeLength: 0.11655,
+      defaultScale: 1,
+      // theta carries the standard UR joint offsets, so joint angles mean what
+      // the teach pendant means: all-zeros is the arm standing straight up.
+      dh: [
+        { joint: 1, theta: 0, a: 0, d: 0.1807, alpha: Math.PI / 2 },
+        { joint: 2, theta: -Math.PI / 2, a: -0.6127, d: 0, alpha: 0 },
+        { joint: 3, theta: 0, a: -0.57155, d: 0, alpha: 0 },
+        { joint: 4, theta: -Math.PI / 2, a: 0, d: 0.17415, alpha: Math.PI / 2 },
+        { joint: 5, theta: 0, a: 0, d: 0.11985, alpha: -Math.PI / 2 },
+        { joint: 6, theta: 0, a: 0, d: 0.11655, alpha: 0 },
+      ],
+    },
+    /**
+     * Rigging metadata for /models/ur10e.glb, converted from UR10e.step by
+     * tools/step_to_glb.py, which keeps the CAD assembly intact.
+     *
+     * This arm is authored the same way round as the UR5e, so it takes that
+     * matrix and an all-zero reference pose: every axis lands on its measured
+     * bore to 0.00 mm. J5 needed the flange to settle, as it did for UR15 --
+     * J6 is parallel to J4 at this pose, so the axes alone allow 0 or -180.
+     * At 0 the flange lands on the measured face exactly; at -180 it points
+     * back down the arm and misses by 233.1 mm.
+     */
+    articulation: {
+      type: "dh-rig",
+      baseNode: "L0_base",
+      linkNodes: [
+        "L1_shoulder",
+        "L2_upper_arm",
+        "L3_forearm",
+        "L4_wrist_1",
+        "L5_wrist_2",
+        "L6_wrist_3",
+      ],
+      referencePoseDeg: [0, 0, 0, 0, 0, 0],
+      // Row-major 3x3: (x, y, z)_dh -> (x, z, -y)_scene
+      dhToScene: [1, 0, 0, 0, 0, 1, 0, -1, 0],
+      // Flip to true to draw a coloured line through each J1-J6 rotation axis.
+      showJointAxes: false,
     },
     motion: {
-      maxAngularVelocityDegPerSec: 165,
-      accelerationDegPerSec2: 105,
+      maxAngularVelocityDegPerSec: 180,
+      accelerationDegPerSec2: "TODO: requires verified manufacturer data",
       smoothing: 0.18,
     },
+    // Payload follows UR's naming convention (UR10e -> 10 kg... 12.5 kg on the
+    // current datasheet) and reach is the catalogue envelope, consistent with
+    // the measured link lengths. The rest still needs manufacturer data.
     specifications: {
       payload: 12.5,
+      payloadKg: 12.5,
       reach: 1300,
-      repeatability: "±0.05 mm",
-      weight: "33.5 kg",
+      reachMm: 1300,
+      repeatability: "unknown",
+      weight: "unknown",
       axes: 6,
-      maxTcpSpeed: "2.2 m/s",
+      maxTcpSpeed: "unknown",
+      dof: 6,
     },
     features: {
       vision: false,
@@ -236,8 +296,8 @@ export const ROBOT_DEFINITIONS = {
       collaborative: true,
     },
     presets: {
-      home: [0, -55, 82, -45, 50, 0],
-      demo: [40, -90, 115, -70, 70, 20],
+      home: [0, -90, 90, -90, 90, 0],
+      demo: [30, -60, 120, -45, 75, 15],
     },
     asset: "ur10e.glb",
   },

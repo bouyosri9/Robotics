@@ -185,12 +185,37 @@ ROBOTS = {
             ("L6_wrist_3",   "wrist3",   ["C-2008882"]),
         ],
     },
-    # Not identified yet: run the inspection pass and read the assembly off
-    # tools/ur10e_solids.json before filling in "links".
+    # UR10e is authored straight up like UR3e and shares UR5e's orientation, so
+    # its reference pose is all zeros. Its bores state the kinematics directly:
+    #
+    #   J1  axis Y through x=0, z=0        J4  axis Z at Y=1364.95
+    #   J2  axis Z at Y=180.70             J5  axis Y through z=174.15
+    #   J3  axis Z at Y=793.40             J6  axis Z at Y=1484.80
+    #
+    # giving d1=180.70, a2=612.70, a3=571.55, d4=174.15, d5=119.85 mm, and
+    # d6=116.55 to the flange face -- the published UR10e table.
+    #
+    # Note the file supplied as UR10e.step was previously named UR12e.step;
+    # the numbers above are what identify it, and they are UR10e's, not UR12e's.
     "ur10e": {
         "step": "UR10e.step",
         "root": "UR10e",
-        "links": None,
+        "links": [
+            # C-1000488..C-1000502 is the connector/cable hardware bolted to the
+            # pedestal (C-1000487). None of it reaches past Y=55.6, well below
+            # the shoulder at Y=99.3, and none carries a joint bore, so it all
+            # rides with the base.
+            ("L0_base",      "base",     ["C-100%04d" % n for n in range(487, 503)]),
+            ("L1_shoulder",  "shoulder", ["C-1000504"]),
+            ("L2_upper_arm", "upperarm", ["C-1000505"]),
+            ("L3_forearm",   "forearm",  ["C-1000506"]),
+            ("L4_wrist_1",   "wrist1",   ["C-1000508"]),
+            # C-1000507 is the same 3 mm interface plate the UR5e has as
+            # C-1000274: centred on the J5 axis, carrying J5 bores and nothing
+            # else. Placed on the wrist 2 side, as there.
+            ("L5_wrist_2",   "wrist2",   ["C-1000510", "C-1000507"]),
+            ("L6_wrist_3",   "wrist3",   ["C-2007000"]),
+        ],
     },
 }
 
