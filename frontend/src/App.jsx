@@ -54,9 +54,7 @@ export default function App() {
           </span>
           <span>
             <span className="brand__name">Cobot Studio</span>
-            <span className="brand__sub" style={{ display: "block" }}>
-              Simulateur collaboratif
-            </span>
+            <span className="brand__sub">Simulateur collaboratif</span>
           </span>
         </button>
 

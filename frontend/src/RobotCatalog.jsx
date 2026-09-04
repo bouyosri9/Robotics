@@ -73,10 +73,19 @@ function RobotCard({ robot, maxPayload, onSelect }) {
   const specs = robot.specifications || {};
 
   return (
-    <button
+    <div
       className="card"
+      role="button"
+      tabIndex={0}
+      aria-label={`Simuler ${robot.manufacturer} ${robot.name}`}
       style={{ "--accent": getManufacturerAccent(robot.manufacturer) }}
       onClick={() => onSelect(robot)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelect(robot);
+        }
+      }}
     >
       <div className="card__head">
         <div style={{ display: "flex", gap: "10px", alignItems: "center", minWidth: 0 }}>
@@ -112,7 +121,7 @@ function RobotCard({ robot, maxPayload, onSelect }) {
         Simuler ce robot
         <ArrowRight size={14} />
       </span>
-    </button>
+    </div>
   );
 }
 

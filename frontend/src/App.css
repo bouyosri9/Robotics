@@ -216,6 +216,11 @@
   flex: none;
 }
 
+.brand__name,
+.brand__sub {
+  display: block;
+}
+
 .brand__name {
   font-size: 14px;
   font-weight: 650;
