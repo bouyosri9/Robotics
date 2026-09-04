@@ -5,7 +5,6 @@ import { ROBOT_DEFINITIONS, ROBOT_LIST, getRobotDefinition } from './robotDefini
 
 const EXPECTED_ROBOTS = [
   'ur3e',
-  'ur7e',
   'ur5e',
   'ur10e',
   'ur15',
@@ -21,7 +20,7 @@ const EXPECTED_ROBOTS = [
 
 test('all robot IDs are unique and complete', () => {
   const ids = ROBOT_LIST.map((robot) => robot.id);
-  assert.equal(ids.length, 13);
+  assert.equal(ids.length, 12);
   assert.deepEqual(ids.sort(), EXPECTED_ROBOTS.sort());
   assert.equal(new Set(ids).size, ids.length);
 });
@@ -59,22 +58,51 @@ test('UR3e matches official manufacturer data', () => {
   assert.equal(robot.joints[5].maxVelocity, 360);
 });
 
-test('UR7e matches the geometry measured from its STEP file', () => {
-  const robot = ROBOT_DEFINITIONS.ur7e;
+test('UR5e matches the geometry measured from its STEP file', () => {
+  const robot = ROBOT_DEFINITIONS.ur5e;
   assert.equal(robot.dof, 6);
-  // Read off the joint bores in UR7e.step: J2 at Y=162.5, J3 at Y=587.5,
+  // Read off the joint bores in UR5e.step: J2 at Y=162.5, J3 at Y=587.5,
   // J4 at Y=979.7, J5 offset 133.3, J6 at Y=1079.4, flange 99.6 past the wrist.
   assert.deepEqual(robot.kinematics.dh.map((item) => Number(item.a.toFixed(5))), [0, -0.425, -0.3922, 0, 0, 0]);
   assert.deepEqual(robot.kinematics.dh.map((item) => Number(item.d.toFixed(5))), [0.1625, 0, 0, 0.1333, 0.0997, 0.0996]);
   assert.deepEqual(robot.kinematics.dh.map((item) => Number(item.alpha.toFixed(5))), [1.5708, 0, 0, 1.5708, -1.5708, 0]);
-  // Same link lengths as UR5e, so the reach has to agree with that entry.
-  assert.equal(robot.specifications.reachMm, ROBOT_DEFINITIONS.ur5e.specifications.reach);
+  // The measured link lengths are UR5e's, so the reach is the 850 mm one.
+  assert.equal(robot.specifications.reachMm, 850);
+  assert.equal(robot.specifications.reach, 850);
 
-  // The UR7e STEP is authored facing the opposite way to the UR3e one. Reusing
+  // The UR5e STEP is authored facing the opposite way to the UR3e one. Reusing
   // UR3e's matrix here would put the J5 axis 266.6 mm off and swing the wrist
   // about a line that misses the real one, so the 180-degree turn is load-bearing.
   assert.deepEqual(robot.articulation.dhToScene, [1, 0, 0, 0, 0, 1, 0, -1, 0]);
   assert.notDeepEqual(robot.articulation.dhToScene, ROBOT_DEFINITIONS.ur3e.articulation.dhToScene);
+  assert.deepEqual(robot.articulation.referencePoseDeg, [0, 0, 0, 0, 0, 0]);
+  assert.equal(robot.articulation.baseNode, 'L0_base');
+  assert.deepEqual(robot.articulation.linkNodes, [
+    'L1_shoulder',
+    'L2_upper_arm',
+    'L3_forearm',
+    'L4_wrist_1',
+    'L5_wrist_2',
+    'L6_wrist_3',
+  ]);
+});
+
+test('UR20 matches the geometry measured from its STEP file', () => {
+  const robot = ROBOT_DEFINITIONS.ur20;
+  assert.equal(robot.dof, 6);
+  // Read off the joint bores in UR20.step: J2 at Y=236.3, J3 at Y=1098.3,
+  // J4 at Y=1827.0, J5 offset 201.0, J6 at Y=1986.3, flange 154.3 past the wrist.
+  assert.deepEqual(robot.kinematics.dh.map((item) => Number(item.a.toFixed(5))), [0, -0.862, -0.7287, 0, 0, 0]);
+  assert.deepEqual(robot.kinematics.dh.map((item) => Number(item.d.toFixed(5))), [0.2363, 0, 0, 0.201, 0.1593, 0.1543]);
+  assert.deepEqual(robot.kinematics.dh.map((item) => Number(item.alpha.toFixed(5))), [1.5708, 0, 0, 1.5708, -1.5708, 0]);
+  assert.equal(robot.specifications.reachMm, 1750);
+
+  // The UR20 STEP faces the same way as the UR3e one, unlike the UR5e one.
+  // Using UR5e's matrix here would put the J5 axis 402.0 mm off, so which of
+  // the two matrices this entry carries is load-bearing.
+  assert.deepEqual(robot.articulation.dhToScene, [-1, 0, 0, 0, 0, 1, 0, 1, 0]);
+  assert.deepEqual(robot.articulation.dhToScene, ROBOT_DEFINITIONS.ur3e.articulation.dhToScene);
+  assert.notDeepEqual(robot.articulation.dhToScene, ROBOT_DEFINITIONS.ur5e.articulation.dhToScene);
   assert.deepEqual(robot.articulation.referencePoseDeg, [0, 0, 0, 0, 0, 0]);
   assert.equal(robot.articulation.baseNode, 'L0_base');
   assert.deepEqual(robot.articulation.linkNodes, [

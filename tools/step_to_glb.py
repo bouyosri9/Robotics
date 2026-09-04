@@ -3,7 +3,7 @@
 Universal Robots STEP -> GLB converter (FreeCAD 1.1, headless).
 
 Usage (Windows):
-    set STEP2GLB_ROBOT=ur7e
+    set STEP2GLB_ROBOT=ur5e
     "%LOCALAPPDATA%\\Programs\\FreeCAD 1.1\\bin\\freecadcmd.exe" tools/step_to_glb.py
 
     STEP2GLB_ROBOT     which ROBOTS entry to build (default: ur3e)
@@ -21,11 +21,11 @@ convention shared by these STEP files and glTF.
 
 Adding a robot means adding a ROBOTS entry, whose "links" table names the CAD
 products making up each link. Those names are not guessable and differ per
-model: UR3e ships readable ones (Link1_UR3), UR7e ships catalogue numbers
+model: UR3e ships readable ones (Link1_UR3), UR5e ships catalogue numbers
 (C-1000248). Run the inspection pass first and read the assembly off the
 geometry instead of guessing:
 
-    set STEP2GLB_ROBOT=ur7e & set STEP2GLB_INSPECT=1 & freecadcmd tools/step_to_glb.py
+    set STEP2GLB_ROBOT=ur5e & set STEP2GLB_INSPECT=1 & freecadcmd tools/step_to_glb.py
 
 It groups the solids by product and orders them along +Y, which is the kinematic
 order for an arm authored straight up.
@@ -65,8 +65,8 @@ ROBOTS = {
             ("L6_wrist_3",   "wrist3",   ["C-2007033"]),
         ],
     },
-    # UR7e names every part by catalogue number, so the mapping below was read
-    # off the geometry (tools/ur7e_solids.json), not off the labels. Each moving
+    # UR5e names every part by catalogue number, so the mapping below was read
+    # off the geometry (tools/ur5e_solids.json), not off the labels. Each moving
     # link is pinned by carrying the bores of *both* joints it sits between:
     #
     #   J1  axis Y through x=0, z=0        J4  axis Z at Y=979.7
@@ -74,10 +74,10 @@ ROBOTS = {
     #   J3  axis Z at Y=587.5              J6  axis Z at Y=1079.4
     #
     # which also states the kinematics: d1=162.5, a2=425, a3=392.2, d4=133.3,
-    # d5=99.7 mm -- UR7e reuses UR5e's link lengths exactly.
-    "ur7e": {
-        "step": "UR7e.step",
-        "root": "UR7e",
+    # d5=99.7 mm -- UR5e reuses UR5e's link lengths exactly.
+    "ur5e": {
+        "step": "UR5e.step",
+        "root": "UR5e",
         "links": [
             # C-1000257 .. C-1000272 is the contiguous block of fixed hardware
             # bolted to the pedestal (C-1000259): connector panel, clamps, feet.
@@ -94,6 +94,31 @@ ROBOTS = {
             # it to L4_wrist_1 -- those are the only two possibilities.
             ("L5_wrist_2",   "wrist2",   ["C-2007861", "C-1000274"]),
             ("L6_wrist_3",   "wrist3",   ["C-2007038"]),
+        ],
+    },
+    # UR20 also names its parts by catalogue number, so this mapping was read
+    # off the geometry (tools/ur20_solids.json). Each moving link carries the
+    # bores of both joints it sits between:
+    #
+    #   J1  axis Y through x=0, z=0        J4  axis Z at Y=1827.0
+    #   J2  axis Z at Y=236.3              J5  axis Y through z=-201.0
+    #   J3  axis Z at Y=1098.3             J6  axis Z at Y=1986.3
+    #
+    # which states the kinematics: d1=236.3, a2=862.0, a3=728.7, d4=201.0,
+    # d5=159.3, d6=154.3 mm -- the published UR20 table, to 0.1 mm.
+    "ur20": {
+        "step": "UR20.step",
+        "root": "UR20",
+        "links": [
+            # 1005866 is a small bracket sitting at Y=-15.5..30.3, bolted to the
+            # pedestal and carrying no joint bore, so it rides with the base.
+            ("L0_base",      "base",     ["C-2003903", "1005866"]),
+            ("L1_shoulder",  "shoulder", ["C-2003904"]),
+            ("L2_upper_arm", "upperarm", ["C-2003905"]),
+            ("L3_forearm",   "forearm",  ["C-2003906"]),
+            ("L4_wrist_1",   "wrist1",   ["C-2003907"]),
+            ("L5_wrist_2",   "wrist2",   ["C-2003908"]),
+            ("L6_wrist_3",   "wrist3",   ["C-2006871"]),
         ],
     },
 }
@@ -175,7 +200,7 @@ def product_map(objs):
     FreeCAD uniquifies repeats of a product by appending a counter, keeping the
     first instance unsuffixed ('C-1000248' -> 'C-1000248001'), so the shortest
     label that prefixes a label is its product. Trimming trailing digits instead
-    works for UR3e ('..._Solid003' -> '..._Solid') but shreds UR7e's catalogue
+    works for UR3e ('..._Solid003' -> '..._Solid') but shreds UR5e's catalogue
     numbers, collapsing the whole arm into a single 'C-' group.
     """
     labels = sorted(set(o.Label for o in objs))
@@ -193,7 +218,7 @@ def merged_bbox(objs):
     """Bounding box over a whole product, world mm.
 
     OCC's box is conservative: it bounds the control polygons of the surfaces,
-    not the surfaces, so a cylinder of radius R can report +-2R (the UR7e base
+    not the surfaces, so a cylinder of radius R can report +-2R (the UR5e base
     measures +-151 here and +-75.5 once meshed). Good enough to order links
     along the arm, useless as a dimension -- identify links by their bores.
     """

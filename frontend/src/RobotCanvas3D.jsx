@@ -234,16 +234,53 @@ function RobotArm({ joints }) {
 }
 
 /**
+ * Camera framing is derived from the robot instead of being fixed, so arms of
+ * different sizes are all shown at the same apparent size. The UR3e spans
+ * 0.92 m from base to flange and the UR5e 1.31 m, so a distance tuned for one
+ * runs the other off the top of the canvas.
+ */
+const FALLBACK_SPAN_M = 0.9;
+// Kept from the original fixed camera: only its distance from the arm changes.
+const VIEW_DIRECTION = new THREE.Vector3(0.5, 0.5, 0.8).normalize();
+
+function robotSpanMeters(robot) {
+  const k = robot?.kinematics;
+  if (!k) return FALLBACK_SPAN_M;
+  // Legacy entries state their lengths in millimetres and carry defaultScale.
+  const scale = Number.isFinite(k.defaultScale) ? k.defaultScale : 1;
+  const span =
+    [k.baseHeight, k.upperArmLength, k.forearmLength, k.wristLength, k.toolLength, k.flangeLength]
+      .filter((value) => Number.isFinite(value))
+      .reduce((total, value) => total + value, 0) * scale;
+  return span > 0 ? span : FALLBACK_SPAN_M;
+}
+
+function framingFor(robot) {
+  const span = robotSpanMeters(robot);
+  const distance = span * 1.6;
+  return {
+    span,
+    distance,
+    // Aim at mid-arm height rather than the floor, so the reach above the
+    // shoulder and the base below it get an equal share of the viewport.
+    target: [0, span * 0.45, 0],
+    position: VIEW_DIRECTION.toArray().map((axis) => axis * distance),
+  };
+}
+
+/**
  * Scene Setup with lights and environment
  */
-function SceneContent({ joints, assetFile, robot }) {
+function SceneContent({ joints, assetFile, robot, framing }) {
   const { camera } = useThree();
+  const [camX, camY, camZ] = framing.position;
+  const [targetX, targetY, targetZ] = framing.target;
 
   useEffect(() => {
     // Position camera
-    camera.position.set(0.5, 0.5, 0.8);
-    camera.lookAt(0, 0.3, 0);
-  }, [camera]);
+    camera.position.set(camX, camY, camZ);
+    camera.lookAt(targetX, targetY, targetZ);
+  }, [camera, camX, camY, camZ, targetX, targetY, targetZ]);
 
   return (
     <>
@@ -260,12 +297,12 @@ function SceneContent({ joints, assetFile, robot }) {
 
       {/* Grid and axes helpers */}
       <Grid
-        args={[2, 2]}
+        args={[framing.span * 2.2, framing.span * 2.2]}
         cellSize={0.1}
         cellColor="#334155"
         sectionSize={0.5}
         sectionColor="#0ea5e9"
-        fadeDistance={1}
+        fadeDistance={framing.distance * 1.1}
         fadeStrength={0.5}
       />
 
@@ -295,6 +332,8 @@ export default function RobotCanvas3D({ joints = {}, assetFile = null, robotName
     ...joints,
   };
 
+  const framing = framingFor(robot);
+
   return (
     <div style={{ width: "100%", height: "100%", background: "#0b0f17" }}>
       <Canvas
@@ -302,9 +341,10 @@ export default function RobotCanvas3D({ joints = {}, assetFile = null, robotName
         gl={{ antialias: true, alpha: true }}
         style={{ background: "#0b0f17" }}
       >
-        <PerspectiveCamera makeDefault position={[0.5, 0.5, 0.8]} />
-        <SceneContent joints={defaultJoints} assetFile={assetFile} robotName={robotName} robot={robot} />
+        <PerspectiveCamera makeDefault position={framing.position} />
+        <SceneContent joints={defaultJoints} assetFile={assetFile} robotName={robotName} robot={robot} framing={framing} />
         <OrbitControls
+          target={framing.target}
           enableZoom={true}
           enablePan={true}
           enableRotate={true}

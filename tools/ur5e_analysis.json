@@ -1,5 +1,5 @@
 {
-  "source_step": "C:\\Users\\gigabyte\\Desktop\\robot-collaborative-simulator-main\\frontend\\public\\models\\UR7e.step",
+  "source_step": "C:\\Users\\gigabyte\\Desktop\\robot-collaborative-simulator-main\\frontend\\public\\models\\UR5e.step",
   "units": "metres",
   "up_axis": "+Y",
   "linear_deflection_mm": 0.3,

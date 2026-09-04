@@ -1,6 +1,6 @@
 {
-  "robot": "ur7e",
-  "source_step": "C:\\Users\\gigabyte\\Desktop\\robot-collaborative-simulator-main\\frontend\\public\\models\\UR7e.step",
+  "robot": "ur5e",
+  "source_step": "C:\\Users\\gigabyte\\Desktop\\robot-collaborative-simulator-main\\frontend\\public\\models\\UR5e.step",
   "total_solids": 23,
   "products": [
     {
